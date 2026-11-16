@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasActiveProfile() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+
+    function isAdmin() {
+      return hasActiveProfile()
+        && request.auth.token.role == 'admin'
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isValidImage(maxBytes) {
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= maxBytes
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    match /profile-images/{userId}/{fileName} {
+      allow read: if hasActiveProfile() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if hasActiveProfile()
+        && request.auth.uid == userId
+        && isValidImage(5242880);
+      allow delete: if hasActiveProfile() && request.auth.uid == userId;
+    }
+
+    match /service-images/{serviceId}/{fileName} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidImage(10485760);
+      allow delete: if isAdmin();
+    }
+
+    match /order-files/{userId}/{orderId}/{fileName} {
+      function ownsOrder() {
+        return hasActiveProfile()
+          && firestore.exists(/databases/(default)/documents/orders/$(orderId))
+          && firestore.get(/databases/(default)/documents/orders/$(orderId)).data.userId == userId
+          && request.auth.uid == userId;
+      }
+
+      allow read: if isAdmin() || ownsOrder();
+      allow create, update: if ownsOrder()
+        && request.resource != null
+        && request.resource.size > 0
+        && request.resource.size <= 10485760
+        && request.resource.contentType.matches('(image/(jpeg|png|webp)|application/pdf|text/plain)');
+      allow delete: if isAdmin() || ownsOrder();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

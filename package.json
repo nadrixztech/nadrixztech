@@ -1,0 +1,24 @@
+{
+  "name": "nadrix-ztechnology",
+  "private": true,
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "build:functions": "npm --workspace functions run build",
+    "test:functions": "npm --workspace functions test",
+    "test:rules": "firebase emulators:exec --project demo-nadrix --only auth,firestore,storage \"node --test tests/firebase-rules.test.mjs\"",
+    "deploy:web": "node scripts/verify-web-config.mjs && npm run build:web && firebase deploy --only hosting",
+    "deploy": "node scripts/verify-web-config.mjs && npm run build:web && firebase deploy"
+  },
+  "workspaces": [
+    "functions"
+  ],
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "esbuild": "^0.28.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.36.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.7"
+  }
+}

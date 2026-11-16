@@ -1,0 +1,126 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasActiveProfile() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+
+    function isAdmin() {
+      return hasActiveProfile()
+        && request.auth.token.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow get: if hasActiveProfile() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create, delete: if false;
+      allow update: if hasActiveProfile()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'phoneNumber', 'photoURL', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+
+      match /devices/{deviceId} {
+        allow read: if hasActiveProfile() && (request.auth.uid == userId || isAdmin());
+        allow create, update: if hasActiveProfile()
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['token', 'platform', 'updatedAt'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() <= 4096
+          && request.resource.data.platform in ['android', 'ios', 'web']
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if hasActiveProfile() && request.auth.uid == userId;
+      }
+
+      match /notifications/{notificationId} {
+        allow get, list: if hasActiveProfile()
+          && (request.auth.uid == userId || isAdmin());
+        allow create, delete: if false;
+        allow update: if hasActiveProfile()
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+          && request.resource.data.readAt == request.time;
+      }
+    }
+
+    match /services/{serviceId} {
+      allow get, list: if resource.data.isActive == true || isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'name', 'description', 'isActive', 'sortOrder', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.createdAt == request.time
+        && validService(request.resource.data);
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'description', 'isActive', 'sortOrder', 'updatedAt'
+        ])
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validService(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    function validService(data) {
+      return data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 80
+        && data.description is string
+        && data.description.size() <= 500
+        && data.isActive is bool
+        && data.sortOrder is int
+        && data.updatedAt == request.time;
+    }
+
+    match /projects/{projectId} {
+      allow get, list: if resource.data.isPublished == true || isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'title', 'description', 'isPublished', 'sortOrder', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.createdAt == request.time
+        && validProject(request.resource.data);
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'description', 'isPublished', 'sortOrder', 'updatedAt'
+        ])
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validProject(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    function validProject(data) {
+      return data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 100
+        && data.description is string
+        && data.description.size() >= 1
+        && data.description.size() <= 2000
+        && data.isPublished is bool
+        && data.sortOrder is int
+        && data.updatedAt == request.time;
+    }
+
+    match /orders/{orderId} {
+      allow get, list: if hasActiveProfile()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    match /internal/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /auditLog/{entryId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+  }
+}
