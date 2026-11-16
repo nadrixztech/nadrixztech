@@ -34,7 +34,7 @@
       "tests/**",
       "functions/**",
       "mobile/**",
-      "README.md/**",
+      "docs/**",
       "server.py",
       "firestore.rules",
       "firestore.indexes.json",

@@ -1,7 +1,7 @@
 # NADRIX mobile app
 
 The Flutter app targets Android and iOS and uses the Firebase project and Cloud
-Functions described in the [project setup guide](../README.md/README.md).
+Functions described in the [project setup guide](../docs/README.md).
 
 Run `flutter pub get`, then `flutter run` with the Firebase `--dart-define`
 values documented in that guide. Android release builds require a private
